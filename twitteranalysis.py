@@ -106,7 +106,8 @@ class twitteranalysis():
         _ts = int(dt.now().timestamp())
         _ts_dir = cache['snapshots'] / str(_ts)
         snapshot = {
-            'stans': self._stans(provide="id"),
+            'username': self.username,
+            stans': self._stans(provide="id"),
             'fans': self._fans(provide="id"),
             'friends': self._friends(provide="id"),
             'followers': self._followers(provide="id")
