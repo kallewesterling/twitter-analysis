@@ -13,8 +13,12 @@ twitter_settings = {
     "wait_on_rate_limit": True,
     "wait_on_rate_limit_notify": True,
 }
-auto_format = "dict" # sets the automatic format that your [twitteranalysis-object].followers/friends/stans/fans will return (can be set to "dict", "screen_name", "id", or "df")
-
+auto_format = "dict"    # sets the automatic format that your [twitteranalysis-object].followers/friends/stans/fans will return (can be set to "dict", "screen_name", "id", or "df")
+force_threshold = {     # files have to be over this many days old when "force=True" forces a download
+    "users": 7,
+    "tweets": 7,
+    "lists": -1,
+}
 
 
 
@@ -34,7 +38,7 @@ class twitteranalysis():
         if consumer_key is None or consumer_secret is None or access_token is None or access_token_secret is None: raise SyntaxError("This module needs all four of Twitter's API's security measures to run: \nPass in a consumer_key, consumer_secret, access_token, and access_token_secret when creating a new instance.")
 
         # Make sure all cache folders are set up correctly
-        _check_cache_folder()
+        _check_cache_folder(username=username)
 
         # Set up variables for the scope of the object
         self.username = username
@@ -57,7 +61,7 @@ class twitteranalysis():
         ''' Provides a list of "friends," people who the user follows. '''
         if provide not in ["dict", "screen_name", "id", "df"]: raise RuntimeError('You must provide one of the following as a "provide" parameter: dict, screen_name, or id.')
 
-        if self._friends_dict is None or force is True: self._friends_dict = self._get_cached_users(provide="friends", force=force)
+        if self._friends_dict is None or force is True: self._friends_dict = self._get_cached_list(provide="friends", force=force)
         if provide is "dict": return(self._friends_dict)
         elif provide is "screen_name": return(list(self._friends_dict.values()))
         elif provide is "id": return(list(self._friends_dict.keys()))
@@ -67,7 +71,7 @@ class twitteranalysis():
         ''' Provides a list of "followers," people who follow the user. '''
         if provide not in ["dict", "screen_name", "id", "df"]: raise RuntimeError('You must provide one of the following as a "provide" parameter: dict, screen_name, or id.')
 
-        if self._followers_dict is None or force is True: self._followers_dict = self._get_cached_users(provide="followers", force=force)
+        if self._followers_dict is None or force is True: self._followers_dict = self._get_cached_list(provide="followers", force=force)
         if provide is "dict": return(self._followers_dict)
         elif provide is "screen_name": return(list(self._followers_dict.values()))
         elif provide is "id": return(list(self._followers_dict.keys()))
@@ -77,7 +81,7 @@ class twitteranalysis():
         ''' Provides a list of "fans," people who follow the user but the user does not follow back. '''
         if provide not in ["dict", "screen_name", "id", "df"]: raise RuntimeError('You must provide one of the following as a "provide" parameter: dict, screen_name, or id.')
 
-        if self._fans_dict is None or force is True: self._fans_dict = self._get_cached_users(provide="fans", force=force)
+        if self._fans_dict is None or force is True: self._fans_dict = self._get_cached_list(provide="fans", force=force)
         if provide is "dict": return(self._fans_dict)
         elif provide is "screen_name": return(list(self._fans_dict.values()))
         elif provide is "id": return(list(self._fans_dict.keys()))
@@ -87,7 +91,7 @@ class twitteranalysis():
         ''' Provides a list of "stans," people the user follows who do not follow the user. '''
         if provide not in ["dict", "screen_name", "id", "df"]: raise RuntimeError('You must provide one of the following as a "provide" parameter: dict, screen_name, or id.')
 
-        if self._stans_dict is None or force is True: self._stans_dict = self._get_cached_users(provide="stans", force=force)
+        if self._stans_dict is None or force is True: self._stans_dict = self._get_cached_list(provide="stans", force=force)
         if provide is "dict": return(self._stans_dict)
         elif provide is "screen_name": return(list(self._stans_dict.values()))
         elif provide is "id": return(list(self._stans_dict.keys()))
@@ -146,7 +150,7 @@ class twitteranalysis():
     def _get_cached_user(self, id=None, force=False):
         ''' Checks whether the data for a user is already downloaded and if it is not, downloads it and stores it in the cache directory for users. '''
         _location = cache['users'] / str(id)
-        if not _location.is_file() or force is True:
+        if not _location.is_file() or (force is True and days_old(type="users", id=id) >= force_threshold["users"]):
             tweet = self.api.get_user(id)
             _json = tweet._json
             with open(_location, 'w+') as f:
@@ -160,10 +164,12 @@ class twitteranalysis():
         return(_json)
 
 
-    def _get_cached_users(self, provide=None, force=False):
+    def _get_cached_list(self, provide=None, force=False):
         ''' Provides a list of the cached users for each username. '''
+        if provide not in ["friends", "followers", "fans", "stans"]: raise RuntimeError("This function can only provide lists of friends, followers fans, or stans. Set 'provide' parameter accordingly.")
+
         _location = cache['lists'] / str(provide)
-        if not _location.is_file() or force is True:
+        if not _location.is_file() or (force is True and days_old(type="lists", id=provide) >= force_threshold["lists"]):
             if provide == "friends":
                 _list_of_ids = self.api.friends_ids(screen_name=self.username)
             elif provide=="followers":
@@ -186,10 +192,10 @@ class twitteranalysis():
         return(_list)
 
 
-    def _get_cached_tweet(self, id=None):
+    def _get_cached_tweet(self, id=None, force=False):
         ''' Checks whether the data for a tweet is already downloaded and if it is not, downloads it and stores it in the cache directory for tweets. '''
         _location = cache['tweets'] / str(id)
-        if not _location.is_file():
+        if not _location.is_file() or (force is True and days_old(type="tweets", id=provide) >= force_threshold["tweets"]):
             tweet = self.api.get_status(id)
             _json = tweet._json
             with open(_location, 'w+') as f:
@@ -209,6 +215,7 @@ class twitteranalysis():
         current_friends = self._friends(provide="id", force=force)
         current_followers = self._followers(provide="id", force=force)
         current_fans = self._fans(provide="id", force=force)
+        print(f"Saving snapshot with {len(current_followers)} followers, {len(current_friends)} friends, {len(current_fans)} fans, and {len(current_stans)} stans.")
         snapshot = {
             'username': self.username,
             'stans': current_stans,
@@ -252,7 +259,8 @@ def _check_cache_folder(username=None):
 
     if username is not None and (cache['lists'] / str(username)).is_dir() is False:
             try:
-                (cache['lists'] / str(username)).mkdir(parents=True)
+                cache['lists'] = cache['lists'] / str(username)
+                cache['lists'].mkdir(parents=True)
             except:
                 raise RuntimeError(f"Could not create {(cache['lists'] / str(username))}")
 
@@ -323,3 +331,17 @@ def diff_snapshot(ts1=None, ts2=None):
             'stans_lost': set(snapshot1['stans']) - set(snapshot2['stans']),
             'stans_gained': set(snapshot2['stans']) - set(snapshot1['stans']),
         })
+
+def age(type="users", id=None, provide="days"):
+    """ Returns the age (in days) of a cached file of a certain type and with a certain identifier provided. """
+
+    # Verify all settings
+    if type == None: raise SyntaxError('A type must be provided.')
+    if id == None: raise SyntaxError('An ID must be provided.')
+
+    path = Path(cache[type] / str(id))
+    ctime = path.stat().st_ctime
+    if provide=="days": age = (ctime - dt.now().timestamp()) / 3600 / 24
+    elif provide=="hours": age = (ctime - dt.now().timestamp()) / 3600
+    elif provide=="seconds": age = (ctime - dt.now().timestamp())
+    return(round(age, 1))
